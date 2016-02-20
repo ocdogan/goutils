@@ -6,14 +6,20 @@ import (
 	"testing"
 )
 
-func debugLog(debug bool, str string, a ...interface{}) {
+var debug = false
+
+func setDebug(state bool) {
+    debug = state
+}
+
+func debugLog(str string, a ...interface{}) {
     if debug {
         fmt.Printf(str, a...)
     }
 }
 
-func mask1(s string, repeatcnt int, debug bool) string {
-    debugLog(debug, "mask1, repeatcnt: %d\n", repeatcnt)
+func mask1(s string, repeatcnt int) string {
+    debugLog("mask1, repeatcnt: %d\n", repeatcnt)
     
     if repeatcnt < 1 {
         panic("Invalid value for param: repeatcnt")
@@ -35,7 +41,7 @@ func mask1(s string, repeatcnt int, debug bool) string {
         
         for i, r := range s {
             charr[i] = r
-            debugLog(debug, "mask1, %d: %s\n", i, string(r))
+            debugLog("mask1, %d: %s\n", i, string(r))
             
             if i > 0 {
                 if r == prev {
@@ -46,7 +52,7 @@ func mask1(s string, repeatcnt int, debug bool) string {
                 if charcnt >= repeatcnt {
                     stoppos = startpos+charcnt-1
                     
-                    debugLog(debug, "mask1, startpos: %d, stoppos: %d\n", startpos, stoppos)
+                    debugLog("mask1, startpos: %d, stoppos: %d\n", startpos, stoppos)
                     
                     for j := stoppos; j >= startpos; j-- {
                         charr[j] = '*'
@@ -62,7 +68,7 @@ func mask1(s string, repeatcnt int, debug bool) string {
         if charcnt >= repeatcnt && startpos <= len(charr)-repeatcnt {
             stoppos = len(charr)-1
                     
-            debugLog(debug, "mask1, startpos: %d, stoppos: %d\n", startpos, stoppos)
+            debugLog("mask1, startpos: %d, stoppos: %d\n", startpos, stoppos)
 
             for j := stoppos; j >= startpos; j-- {
                 charr[j] = '*'
@@ -73,7 +79,7 @@ func mask1(s string, repeatcnt int, debug bool) string {
     return s
 }
 
-func mask2(s string, repeatcnt int, debug bool) string {
+func mask2(s string, repeatcnt int) string {
     if repeatcnt < 1 {
         panic("Invalid value for param: repeatcnt")
     }
@@ -93,7 +99,7 @@ func mask2(s string, repeatcnt int, debug bool) string {
         var mask bool
         
         for i, r := range s {
-            debugLog(debug, "mask2, %d: %s\n", i, string(r))
+            debugLog("mask2, %d: %s\n", i, string(r))
                    
             if i == 0 || r != prev {
                 prev = r
@@ -114,7 +120,7 @@ func mask2(s string, repeatcnt int, debug bool) string {
                 if !mask {
                     charr[i] = r
                 } else {
-                    debugLog(debug, "mask2, startpos: %d\n", startpos)
+                    debugLog("mask2, startpos: %d\n", startpos)
                     
                     for j := i; j >= startpos; j-- {
                         charr[j] = '*'
@@ -128,24 +134,19 @@ func mask2(s string, repeatcnt int, debug bool) string {
     return s
 }
 
-type masker func(s string, repeatcnt int, debug bool) string
+type masker func(s string, repeatcnt int) string
 
-func test(str string, debug bool, printResults bool, f masker) {
-    s1 := f(str, 1, debug)
-    s2 := f(str, 2, debug)
-    s3 := f(str, 3, debug)
-    s4 := f(str, 4, debug)
-    s5 := f(str, 5, debug)
-    s6 := f(str, 6, debug)
+func runTest(f masker, str string, printResults bool) {
+    results := make([]string, 6)
+    for i := range results {
+        results[i] = f(str, i + 1)
+    }
     
     if printResults {
         fmt.Println(0, str)
-        fmt.Println(1, s1)
-        fmt.Println(2, s2)
-        fmt.Println(3, s3)
-        fmt.Println(4, s4)
-        fmt.Println(5, s5)
-        fmt.Println(6, s6)
+        for i, s := range results {
+            fmt.Println(i + 1, s)
+        }
     }
 }
 
@@ -154,7 +155,7 @@ func TestNano(t *testing.T) {
     
     w := New()
     for i := 0; i < 1000; i++ {
-        test(str, false, false, mask2)
+        runTest(mask2, str, false)
     }
     w.Stop()
     t2 := w.Milliseconds() * int64(time.Millisecond)
@@ -165,7 +166,7 @@ func TestNano(t *testing.T) {
 
     w.Restart()
     for i := 0; i < 1000; i++ {
-        test(str, false, false, mask1)
+        runTest(mask1, str, false)
     }
     w.Stop()    
     t1 := w.Nanoseconds()
