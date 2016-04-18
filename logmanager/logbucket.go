@@ -113,9 +113,7 @@ func formatAsText(entry *LogEntry) []byte {
     writeToBuffer(buffer, "message", entry.message)
     writeToBuffer(buffer, "stack", entry.stack)
     
-    if entry.args == nil {
-        writeToBuffer(buffer, "args=\"\"", nil)    
-    } else {
+    if entry.args != nil {
         for k, v := range entry.args {
             writeToBuffer(buffer, k, v)
         }
@@ -184,7 +182,7 @@ func (bucket *logBucket) process() {
                             LogType string `json:"logType"`
                             Message string `json:"message"`
                             Stack string `json:"stack"`
-                            Args map[string]interface{} `json:"args"`
+                            Args map[string]interface{} `json:"args,omitempty"`
                         }{
                             ID: entry.id,
                             Time: entry.time,
