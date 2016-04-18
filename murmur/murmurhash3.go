@@ -5,8 +5,11 @@ import (
 )
 
 const (
-    c1 uint32 = 0xcc9e2d51
-    c2 uint32 = 0x1b873593
+    c1  uint32 = 0xcc9e2d51
+    c2  uint32 = 0x1b873593
+    k   uint32 = 0xe6546b64
+    fx1 uint32 = 0x85ebca6b
+    fx2 uint32 = 0xc2b2ae35
 )
 
 func MurmurHash3(data []byte, length uint32, seed uint32) uint32 {
@@ -23,7 +26,7 @@ func MurmurHash3(data []byte, length uint32, seed uint32) uint32 {
 
         h1 ^= k1l
         h1 = mmhRotateLeft(h1, 13)
-        h1 = h1 * 5 + 0xe6546b64
+        h1 = h1 * 5 + k
 
         i += 4
     }
@@ -52,9 +55,9 @@ func MurmurHash3(data []byte, length uint32, seed uint32) uint32 {
 
 func mmhFMix(h uint32) uint32 {
     h ^= h >> 16
-    h *= 0x85ebca6b
+    h *= fx1
     h ^= h >> 13
-    h *= 0xc2b2ae35
+    h *= fx2
     h ^= h >> 16
 
     return h
