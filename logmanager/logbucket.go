@@ -7,6 +7,7 @@ import (
     "fmt"
     "sync"
     "sync/atomic"
+    "time"
 )
 
 const (
@@ -176,7 +177,23 @@ func (bucket *logBucket) process() {
                 switch handler.FormatterType() {
                 case JsonFormatter:
                     if jsonEntry == nil {
-                        b, e := json.Marshal(entry)
+                        b, e := json.Marshal(struct{
+                            ID string `json:"id"`
+                            Time time.Time `json:"time"`
+                            Duration time.Duration `json:"duration"`
+                            LogType string `json:"logType"`
+                            Message string `json:"message"`
+                            Stack string `json:"stack"`
+                            Args map[string]interface{} `json:"args"`
+                        }{
+                            ID: entry.id,
+                            Time: entry.time,
+                            Duration: entry.duration,
+                            LogType: entry.logType.String(),
+                            Message: entry.message,
+                            Stack: entry.stack,
+                            Args: entry.args,
+                        })
                         if e != nil {
                             continue
                         }
