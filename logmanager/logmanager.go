@@ -74,7 +74,24 @@ func RegisterHandler(handler LogHandler) {
         defer bucketMtx.Unlock()
         
         bucket := newBucket(handler)
-        buckets[handler.Name()] = bucket
+        buckets[name] = bucket
+        go bucket.process()
+    }
+}
+
+// RegisterHandlerWithName adds the handler into the logging chain with the given name
+func RegisterHandlerWithName(name string, handler LogHandler) {
+    if handler != nil {
+        if name == "" {
+            name = handler.Name()
+        }
+        
+        UnregisterHandler(name)        
+        bucketMtx.Lock()
+        defer bucketMtx.Unlock()
+        
+        bucket := newBucket(handler)
+        buckets[name] = bucket
         go bucket.process()
     }
 }
@@ -113,9 +130,23 @@ func Log(entry *LogEntry) {
         bucketMtx.Lock()
         defer bucketMtx.Unlock()
         
+        var jsonData, textData []byte
         for _, bucket := range buckets {
             if bucket.enabled() {
-                bucket.entryChan <- entry
+                switch bucket.formatterType() {
+                case JSONFormatter:
+                    if jsonData == nil {
+                        jsonData = entry.ToJSON()
+                    }
+                    bucket.entryChan <- jsonData
+                case TextFormatter:
+                    if textData == nil {
+                        textData = entry.ToText()
+                    }
+                    bucket.entryChan <- textData
+                default:
+                    bucket.entryChan <- entry
+                }
             }
         }
     }    

@@ -23,13 +23,9 @@
 package logmanager
 
 import (
-    "bytes"
     "container/list"
-    "encoding/json"
-    "fmt"
     "sync"
     "sync/atomic"
-    "time"
 )
 
 const (
@@ -61,7 +57,7 @@ type logBucket struct {
     sync.Mutex
     done chan bool
     completed uint32
-    entryChan chan *LogEntry
+    entryChan chan interface{}
     queue *list.List
     handler LogHandler
 }
@@ -71,7 +67,7 @@ func newBucket(handler LogHandler) *logBucket {
         handler: handler,
         queue: list.New(),
         done: make(chan bool),
-        entryChan: make(chan *LogEntry),
+        entryChan: make(chan interface{}),
         completed: falseUint32,
     }
 }
@@ -82,13 +78,20 @@ func (bucket *logBucket) enabled() bool {
         bucket.handler.Enabled()
 }
 
+func (bucket *logBucket) formatterType() LogFormatterType {
+    if bucket.handler != nil { 
+        return bucket.handler.FormatterType()
+    }
+    return CustomFormatter
+}
+
 func (bucket *logBucket) close() {
     bucket.done <- true
     close(bucket.done)
     close(bucket.entryChan)
 }
     
-func (bucket *logBucket) pop() *LogEntry {
+func (bucket *logBucket) pop() interface{} {
     bucket.Lock()
     defer bucket.Unlock()
     
@@ -96,13 +99,13 @@ func (bucket *logBucket) pop() *LogEntry {
         elm := bucket.queue.Back()
         if elm != nil {
             bucket.queue.Remove(elm)
-            return elm.Value.(*LogEntry)
+            return elm.Value
         }
     }
     return nil
 }
 
-func (bucket *logBucket) push(entry *LogEntry) {
+func (bucket *logBucket) push(data interface{}) {
     bucket.Lock()
     defer bucket.Unlock()
     
@@ -118,63 +121,18 @@ func (bucket *logBucket) push(entry *LogEntry) {
         l = bucket.queue.Len()
     }
 
-    bucket.queue.PushBack(entry)
-}
-
-func formatAsText(entry *LogEntry) []byte {
-    if entry == nil {
-        return nil
-    }
-    
-    buffer := &bytes.Buffer{}
-
-    writeToBuffer(buffer, "id", entry.id)
-    writeToBuffer(buffer, "time", entry.time)
-    writeToBuffer(buffer, "duration", entry.duration)
-    writeToBuffer(buffer, "logType", entry.logType.String())
-    writeToBuffer(buffer, "message", entry.message)
-    writeToBuffer(buffer, "stack", entry.stack)
-    
-    if entry.args != nil {
-        for k, v := range entry.args {
-            writeToBuffer(buffer, k, v)
-        }
-    }
-    
-    return buffer.Bytes()
-}
-
-func isTextOrNumber(value string) bool {
-	for _, c := range value {
-		if !((c >= 'a' && c <= 'z') ||
-			(c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') ||
-            c == '-' || c == '+' || 
-            c == '.' || c == ',') {
-			return true
-		}
-	}
-	return false
-}
-
-func writeToBuffer(buffer *bytes.Buffer, key string, value interface{}) {
-    buffer.WriteString(key)
-    
-    switch value.(type) {
-    case nil:
-        break
+    switch data.(type) {
+    case []byte:
+        bucket.queue.PushBack(data)
+    case *LogEntry:
+        bucket.queue.PushBack(data)
+    case LogEntry:
+        bucket.queue.PushBack(&data)
     case string:
-        if !isTextOrNumber(value.(string)) {
-            fmt.Fprintf(buffer, "=%q ", value)
-        } else {
-            buffer.WriteString("=\"")
-            buffer.WriteString(value.(string))
-            buffer.WriteString("\" ")
+        s := data.(string)
+        if s != "" {
+            bucket.queue.PushBack([]byte(s))
         }
-    default:
-        buffer.WriteString("=\"")
-        fmt.Fprint(buffer, value)         
-        buffer.WriteString("\" ")
     }
 }
 
@@ -187,46 +145,28 @@ func (bucket *logBucket) process() {
         case entry := <-bucket.entryChan:
             bucket.push(entry)
         default:
-            entry := bucket.pop() 
-            if entry == nil {
+            e := bucket.pop()
+            if e == nil {
                 continue
             }
             handler := bucket.handler
             if handler.Enabled() {
-                var jsonEntry, textEntry []byte
                 switch handler.FormatterType() {
                 case JsonFormatter:
-                    if jsonEntry == nil {
-                        b, e := json.Marshal(struct{
-                            ID string `json:"id"`
-                            Time time.Time `json:"time"`
-                            Duration time.Duration `json:"duration"`
-                            LogType string `json:"logType"`
-                            Message string `json:"message"`
-                            Stack string `json:"stack"`
-                            Args map[string]interface{} `json:"args,omitempty"`
-                        }{
-                            ID: entry.id,
-                            Time: entry.time,
-                            Duration: entry.duration,
-                            LogType: entry.logType.String(),
-                            Message: entry.message,
-                            Stack: entry.stack,
-                            Args: entry.args,
-                        })
-                        if e != nil {
-                            continue
-                        }
-                        jsonEntry = b
+                    b, ok := e.([]byte)
+                    if ok && len(b) > 0 {
+                        handler.ProcessJson(b)
                     }
-                    handler.ProcessJson(jsonEntry)
                 case TextFormatter:
-                    if textEntry == nil {                        
-                        textEntry = formatAsText(entry)
+                    b, ok := e.([]byte)
+                    if ok && len(b) > 0 {
+                        handler.ProcessText(b)
                     }
-                    handler.ProcessText(textEntry)
                 case CustomFormatter:
-                    handler.ProcessCustom(entry)
+                    entry, ok := e.(*LogEntry)
+                    if ok && entry != nil {
+                        handler.ProcessCustom(entry)
+                    }
                 }
             }
         }

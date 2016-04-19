@@ -22,12 +22,17 @@
 
 package logmanager
 
+// LogType is used to inform the system about the given message type
 type LogType byte
 
 const (
+    // InfoLog is used if the message is an information
     InfoLog LogType = iota
+    // WarningLog is used if the message is a warning
     WarningLog
+    // ErrorLog is used if the message is an error
     ErrorLog
+    // FatalLog is used if the message is a fatal error
     FatalLog
 )
 

@@ -25,7 +25,10 @@ package logmanager
 type LogFormatterType byte
 
 const (
+    // TextFormatter represents that the hadler will accept the log entry in text line format as input
     TextFormatter LogFormatterType = iota
-    JsonFormatter
+    // JSONFormatter represents that the hadler will accept the log entry in JSON format as input
+    JSONFormatter
+    // CustomFormatter represents that the hadler will accept the log entry as input and will format the entry by it self
     CustomFormatter
 )
