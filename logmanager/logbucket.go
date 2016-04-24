@@ -152,7 +152,7 @@ func (bucket *logBucket) process() {
             handler := bucket.handler
             if handler.Enabled() {
                 switch handler.FormatterType() {
-                case JsonFormatter:
+                case JSONFormatter:
                     b, ok := e.([]byte)
                     if ok && len(b) > 0 {
                         handler.ProcessJson(b)

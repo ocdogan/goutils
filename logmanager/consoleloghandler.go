@@ -48,7 +48,7 @@ func (handler *ConsoleLogHandler) Disable() {
 }
 
 func (handler *ConsoleLogHandler) FormatterType() LogFormatterType {
-    return JsonFormatter
+    return JSONFormatter
 }
 
 func (handler *ConsoleLogHandler) ProcessText(entry []byte) {
