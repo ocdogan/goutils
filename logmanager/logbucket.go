@@ -78,11 +78,37 @@ func (bucket *logBucket) enabled() bool {
         bucket.handler.Enabled()
 }
 
-func (bucket *logBucket) formatterType() LogFormatterType {
+func (bucket *logBucket) level() LogLevel {
     if bucket.handler != nil { 
-        return bucket.handler.FormatterType()
+        l := bucket.handler.Level()
+        if l != LogLevel(0) {
+            return l
+        }
     }
-    return CustomFormatter
+    return AllLogLevels
+}
+
+func (bucket *logBucket) format() LogFormat {
+    if bucket.handler != nil { 
+        return bucket.handler.Format()
+    }
+    return CustomFormat
+}
+
+func (bucket *logBucket) queueLen() int {
+    if bucket.handler != nil { 
+        ql := bucket.handler.QueueLen()
+        if ql < 0 {
+            return int(BucketCapacity())
+        }
+        if ql < int(minBucketCap) {
+            ql = int(minBucketCap)
+        } else if ql > int(maxBucketCap) {
+            ql = int(maxBucketCap)
+        }
+        return ql
+    }
+    return 0
 }
 
 func (bucket *logBucket) close() {
@@ -110,7 +136,7 @@ func (bucket *logBucket) push(data interface{}) {
     defer bucket.Unlock()
     
     l := bucket.queue.Len()
-    cap := int(BucketCapacity())
+    cap := bucket.queueLen()
 
     for l > 0 && l >= cap {
         elm := bucket.queue.Back()
@@ -151,21 +177,18 @@ func (bucket *logBucket) process() {
             }
             handler := bucket.handler
             if handler.Enabled() {
-                switch handler.FormatterType() {
-                case JSONFormatter:
+                switch handler.Format() {
+                case TextFormat:
+                    fallthrough
+                case JSONFormat:
                     b, ok := e.([]byte)
                     if ok && len(b) > 0 {
-                        handler.ProcessJson(b)
+                        handler.Process(b)
                     }
-                case TextFormatter:
-                    b, ok := e.([]byte)
-                    if ok && len(b) > 0 {
-                        handler.ProcessText(b)
-                    }
-                case CustomFormatter:
+                case CustomFormat:
                     entry, ok := e.(*LogEntry)
                     if ok && entry != nil {
-                        handler.ProcessCustom(entry)
+                        handler.Process(entry)
                     }
                 }
             }

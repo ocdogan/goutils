@@ -31,32 +31,92 @@ import (
     "github.com/ocdogan/goutils/uuid"
 )
 
+// LogEntry is used to send the information to handlers
 type LogEntry struct {
     id string
     time time.Time
     duration time.Duration
     message string
     stack string
-    logType LogType
+    level LogLevel
     args map[string]interface{}
 }
 
-func NewLogEntry(message string, args map[string]interface{}) *LogEntry {
+// NewInfoLogEntry creates a new log entry with info level which will be send to handlers
+func NewInfoLogEntry(message string, args map[string]interface{}) *LogEntry {
     uuid, _ := uuid.NewUUID()
     result := &LogEntry{
         id: uuid.String(),
         time: time.Now(),
         message: message,
         args: args,
+        level: LevelInfo,
     }
     
+    result.writeStack()
+    return result
+}
+
+// NewWarningLogEntry creates a new log entry with warning level which will be send to handlers
+func NewWarningLogEntry(message string, args map[string]interface{}) *LogEntry {
+    uuid, _ := uuid.NewUUID()
+    result := &LogEntry{
+        id: uuid.String(),
+        time: time.Now(),
+        message: message,
+        args: args,
+        level: LevelWarning,
+    }
+    
+    result.writeStack()
+    return result
+}
+
+// NewErrorLogEntry creates a new log entry with error level which will be send to handlers
+func NewErrorLogEntry(err error, args map[string]interface{}) *LogEntry {
+    var message string
+    if err != nil {
+        message = err.Error()
+    }
+    uuid, _ := uuid.NewUUID()
+    result := &LogEntry{
+        id: uuid.String(),
+        time: time.Now(),
+        message: message,
+        args: args,
+        level: LevelError,
+    }
+    
+    result.writeStack()
+    return result
+}
+
+// NewFatalLogEntry creates a new log entry with fatal level which will be send to handlers
+func NewFatalLogEntry(err error, args map[string]interface{}) *LogEntry {
+    var message string
+    if err != nil {
+        message = err.Error()
+    }
+    uuid, _ := uuid.NewUUID()
+    result := &LogEntry{
+        id: uuid.String(),
+        time: time.Now(),
+        message: message,
+        args: args,
+        level: LevelFatal,
+    }
+    
+    result.writeStack()
+    return result
+}
+
+func (entry *LogEntry) writeStack() {
     if Enabled() && StacktraceEnabled() {
         stack := make([]byte, 1<<20)
         len := runtime.Stack(stack, true)
                     
-        result.stack = string(stack[:len])
+        entry.stack = string(stack[:len])
     }
-    return result
 }
 
 // ID returns the id of the entry
@@ -84,9 +144,9 @@ func (entry *LogEntry) Stack() string {
     return entry.stack
 }
 
-// LogType returns the log type of the entry
-func (entry *LogEntry) LogType() LogType {
-    return entry.logType
+// Level returns the log type of the entry
+func (entry *LogEntry) Level() LogLevel {
+    return entry.level
 }
 
 // Args returns the arguments of the entry
@@ -110,7 +170,7 @@ func (entry *LogEntry) ToJSON() []byte {
         ID string `json:"id"`
         Time time.Time `json:"time"`
         Duration time.Duration `json:"duration"`
-        LogType string `json:"logType"`
+        Level string `json:"level"`
         Message string `json:"message"`
         Stack string `json:"stack"`
         Args map[string]interface{} `json:"args,omitempty"`
@@ -118,7 +178,7 @@ func (entry *LogEntry) ToJSON() []byte {
         ID: entry.id,
         Time: entry.time,
         Duration: entry.duration,
-        LogType: entry.logType.String(),
+        Level: entry.level.String(),
         Message: entry.message,
         Stack: entry.stack,
         Args: entry.args,
@@ -140,7 +200,7 @@ func (entry *LogEntry) ToText() []byte {
     writeKvToBuffer(buffer, "id", entry.id)
     writeKvToBuffer(buffer, "time", entry.time)
     writeKvToBuffer(buffer, "duration", entry.duration)
-    writeKvToBuffer(buffer, "logType", entry.logType.String())
+    writeKvToBuffer(buffer, "level", entry.level.String())
     writeKvToBuffer(buffer, "message", entry.message)
     writeKvToBuffer(buffer, "stack", entry.stack)
     

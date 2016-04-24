@@ -27,38 +27,50 @@ import (
     "sync/atomic"
 )
 
+// ConsoleLogHandler is used to push the log entry to console
 type ConsoleLogHandler struct {
     disabled uint32
 }
 
+// Name returns the name of the handler used for registration
 func (handler *ConsoleLogHandler) Name() string {
     return "console"
 }
 
+// Enabled returns if the handler is active
 func (handler *ConsoleLogHandler) Enabled() bool {
     return atomic.LoadUint32(&handler.disabled) == falseUint32
 }
 
+// Enable activates the handler
 func (handler *ConsoleLogHandler) Enable() {
     atomic.StoreUint32(&handler.disabled, falseUint32)
 }
 
+// Disable deactivates the handler
 func (handler *ConsoleLogHandler) Disable() {
     atomic.StoreUint32(&handler.disabled, trueUint32)
 }
 
-func (handler *ConsoleLogHandler) FormatterType() LogFormatterType {
-    return JSONFormatter
+// Level gives if the pushed entry should be logged by the handler
+func (handler *ConsoleLogHandler) Level() LogLevel {
+    return AllLogLevels
 }
 
-func (handler *ConsoleLogHandler) ProcessText(entry []byte) {
-    fmt.Println(string(entry))
+// Format gives the format that will be used by the handler
+func (handler *ConsoleLogHandler) Format() LogFormat {
+    return JSONFormat
 }
 
-func (handler *ConsoleLogHandler) ProcessJson(entry []byte) {    
-    fmt.Println(string(entry))
+// QueueLen gives the queue length that will be used when the entry is queued
+func (handler *ConsoleLogHandler) QueueLen() int {
+    return -1
 }
 
-func (handler *ConsoleLogHandler) ProcessCustom(entry *LogEntry) {    
+// Process evaluates the given entry
+func (handler *ConsoleLogHandler) Process(entry interface{}) {
+    if data, ok := entry.([]byte); ok {
+        fmt.Println(string(data))
+    }
 }
 

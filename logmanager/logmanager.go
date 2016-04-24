@@ -86,7 +86,7 @@ func RegisterHandlerWithName(name string, handler LogHandler) {
             name = handler.Name()
         }
         
-        UnregisterHandler(name)        
+        UnregisterHandler(name)
         bucketMtx.Lock()
         defer bucketMtx.Unlock()
         
@@ -108,19 +108,31 @@ func UnregisterHandler(name string) {
     delete(buckets, name)
 }
 
+// LogFatal is used to log the given error as fatal by log manager
+func LogFatal(e error, args map[string]interface{}) {
+    if e != nil && Enabled() {
+        Log(NewErrorLogEntry(e, args))
+    }
+}
+
 // LogError is used to log the given error by log manager
 func LogError(e error, args map[string]interface{}) {
     if e != nil && Enabled() {
-        entry := NewLogEntry(e.Error(), args)
-        entry.logType = ErrorLog
-        Log(entry)
+        Log(NewErrorLogEntry(e, args))
+    }
+}
+
+// LogWarning is used to log the message as warning by log manager
+func LogWarning(message string, args map[string]interface{}) {
+    if Enabled() {
+        Log(NewWarningLogEntry(message, args))
     }
 }
 
 // LogMessage is used to log the given message by log manager
 func LogMessage(message string, args map[string]interface{}) {
     if Enabled() {
-        Log(NewLogEntry(message, args))
+        Log(NewInfoLogEntry(message, args))
     }    
 }
 
@@ -132,14 +144,14 @@ func Log(entry *LogEntry) {
         
         var jsonData, textData []byte
         for _, bucket := range buckets {
-            if bucket.enabled() {
-                switch bucket.formatterType() {
-                case JSONFormatter:
+            if bucket.enabled() && bucket.level().Has(entry.level) {
+                switch bucket.format() {
+                case JSONFormat:
                     if jsonData == nil {
                         jsonData = entry.ToJSON()
                     }
                     bucket.entryChan <- jsonData
-                case TextFormatter:
+                case TextFormat:
                     if textData == nil {
                         textData = entry.ToText()
                     }

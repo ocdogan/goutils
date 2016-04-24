@@ -22,13 +22,14 @@
 
 package logmanager
 
-type LogFormatterType byte
+// LogFormat defines the format of the log that will be processed by a handler
+type LogFormat byte
 
 const (
-    // TextFormatter represents that the hadler will accept the log entry in text line format as input
-    TextFormatter LogFormatterType = iota
-    // JSONFormatter represents that the hadler will accept the log entry in JSON format as input
-    JSONFormatter
-    // CustomFormatter represents that the hadler will accept the log entry as input and will format the entry by it self
-    CustomFormatter
+    // TextFormat represents that the hadler will accept the log entry in text line format as input
+    TextFormat LogFormat = iota
+    // JSONFormat represents that the hadler will accept the log entry in JSON format as input
+    JSONFormat
+    // CustomFormat represents that the hadler will accept the log entry as input and will format the entry by it self
+    CustomFormat
 )

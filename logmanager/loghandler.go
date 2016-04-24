@@ -24,12 +24,20 @@ package logmanager
 
 // LogHandler is the interface which handles log writes to different destinations
 type LogHandler interface {
+    // Name returns the name of the handler used for registration
     Name() string
+    // Enable activates the handler
     Enable()
+    // Enable deactivates the handler
     Disable()
+    // Enabled returns if the handler is active
     Enabled() bool
-    FormatterType() LogFormatterType
-    ProcessJson(entry []byte)
-    ProcessText(entry []byte)
-    ProcessCustom(entry *LogEntry)
+    // Level gives if the pushed entry should be logged by the handler
+    Level() LogLevel
+    // Format gives the format that will be used by the handler
+    Format() LogFormat
+    // QueueLen gives the queue length that will be used when the entry is queued
+    QueueLen() int
+    // Process evaluates the given entry
+    Process(entry interface{})
 }
