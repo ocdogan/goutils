@@ -23,9 +23,10 @@
 package logmanager
 
 import (
-    "container/list"
+    // "container/list"
     "sync"
     "sync/atomic"
+    "github.com/ocdogan/goutils/utils"
 )
 
 const (
@@ -54,20 +55,23 @@ func SetBucketCapacity(cap uint32) {
 }
 
 type logBucket struct {
-    sync.Mutex
+    sync.Mutex    
     done chan bool
+    inProc uint32
     completed uint32
-    entryChan chan interface{}
-    queue *list.List
+    readyChan chan bool
+    queueChan chan interface{}
+    queue *logQueue
     handler LogHandler
 }
 
 func newBucket(handler LogHandler) *logBucket {
     return &logBucket{
         handler: handler,
-        queue: list.New(),
+        queue: newLogQueue(handler.QueueLen()),
         done: make(chan bool),
-        entryChan: make(chan interface{}),
+        readyChan: make(chan bool),
+        queueChan: make(chan interface{}),
         completed: falseUint32,
     }
 }
@@ -76,6 +80,10 @@ func (bucket *logBucket) enabled() bool {
     return atomic.LoadUint32(&bucket.completed) == falseUint32 && 
         bucket.handler != nil && 
         bucket.handler.Enabled()
+}
+
+func (bucket *logBucket) processing() bool {
+    return atomic.LoadUint32(&bucket.inProc) != falseUint32
 }
 
 func (bucket *logBucket) level() LogLevel {
@@ -114,50 +122,22 @@ func (bucket *logBucket) queueLen() int {
 func (bucket *logBucket) close() {
     bucket.done <- true
     close(bucket.done)
-    close(bucket.entryChan)
+    close(bucket.readyChan)
+    close(bucket.queueChan)
 }
     
-func (bucket *logBucket) pop() interface{} {
-    bucket.Lock()
-    defer bucket.Unlock()
-    
-    if bucket.queue.Len() > 0 {
-        elm := bucket.queue.Back()
-        if elm != nil {
-            bucket.queue.Remove(elm)
-            return elm.Value
-        }
-    }
-    return nil
-}
-
 func (bucket *logBucket) push(data interface{}) {
-    bucket.Lock()
-    defer bucket.Unlock()
-    
-    l := bucket.queue.Len()
-    cap := bucket.queueLen()
-
-    for l > 0 && l >= cap {
-        elm := bucket.queue.Back()
-        if elm == nil {
-            break
-        }
-        bucket.queue.Remove(elm)
-        l = bucket.queue.Len()
-    }
-
     switch data.(type) {
     case []byte:
-        bucket.queue.PushBack(data)
+        bucket.queue.push(data)
     case *LogEntry:
-        bucket.queue.PushBack(data)
+        bucket.queue.push(data)
     case LogEntry:
-        bucket.queue.PushBack(&data)
+        bucket.queue.push(&data)
     case string:
         s := data.(string)
         if s != "" {
-            bucket.queue.PushBack([]byte(s))
+            bucket.queue.push([]byte(s))
         }
     }
 }
@@ -168,30 +148,57 @@ func (bucket *logBucket) process() {
         case <-bucket.done:
             atomic.StoreUint32(&bucket.completed, trueUint32)
             return
-        case entry := <-bucket.entryChan:
-            bucket.push(entry)
-        default:
-            e := bucket.pop()
-            if e == nil {
-                continue
+        case ready, ok := <-bucket.readyChan:
+            if !ok {
+                return
             }
-            handler := bucket.handler
-            if handler.Enabled() {
-                switch handler.Format() {
-                case TextFormat:
-                    fallthrough
-                case JSONFormat:
-                    b, ok := e.([]byte)
-                    if ok && len(b) > 0 {
-                        handler.Process(b)
-                    }
-                case CustomFormat:
-                    entry, ok := e.(*LogEntry)
-                    if ok && entry != nil {
-                        handler.Process(entry)
+            if ready {
+                e := bucket.queue.pop()
+                if !utils.HasValue(e) {
+                    continue
+                }
+                handler := bucket.handler
+                if handler.Enabled() {
+                    switch handler.Format() {
+                    case TextFormat:
+                        fallthrough
+                    case JSONFormat:
+                        b, ok := e.([]byte)
+                        if ok && len(b) > 0 {
+                            handler.Process(b)
+                        }
+                    case CustomFormat:
+                        entry, ok := e.(*LogEntry)
+                        if ok && entry != nil {
+                            handler.Process(entry)
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+func (bucket *logBucket) handle() {
+    if bucket.processing() {
+        return
+    }
+    atomic.StoreUint32(&bucket.inProc, trueUint32)
+    defer atomic.StoreUint32(&bucket.inProc, falseUint32)
+    
+    go bucket.process()
+    
+    for bucket.enabled() {
+        select {
+        case <-bucket.done:
+            atomic.StoreUint32(&bucket.completed, trueUint32)
+            return
+        case entry, ok := <-bucket.queueChan:
+            if !ok {
+                return
+            }
+            bucket.push(entry)
+            bucket.readyChan <- true
         }
     }
 }

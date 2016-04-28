@@ -75,7 +75,7 @@ func RegisterHandler(handler LogHandler) {
         
         bucket := newBucket(handler)
         buckets[name] = bucket
-        go bucket.process()
+        go bucket.handle()
     }
 }
 
@@ -150,14 +150,14 @@ func Log(entry *LogEntry) {
                     if jsonData == nil {
                         jsonData = entry.ToJSON()
                     }
-                    bucket.entryChan <- jsonData
+                    bucket.queueChan <- jsonData
                 case TextFormat:
                     if textData == nil {
                         textData = entry.ToText()
                     }
-                    bucket.entryChan <- textData
+                    bucket.queueChan <- textData
                 default:
-                    bucket.entryChan <- entry
+                    bucket.queueChan <- entry
                 }
             }
         }
