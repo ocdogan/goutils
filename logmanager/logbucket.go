@@ -180,9 +180,12 @@ func (bucket *logBucket) process() {
 }
 
 func (bucket *logBucket) handle() {
-    if !atomic.CompareAndSwapUint32(&bucket.inProc, falseUint32, trueUint32) {
+    if atomic.LoadUint32(&bucket.completed) == trueUint32 ||
+        !atomic.CompareAndSwapUint32(&bucket.inProc, falseUint32, trueUint32) {
         return
     }
+    defer atomic.StoreUint32(&bucket.inProc, falseUint32)
+    
     go bucket.process()
     
     for bucket.enabled() {
