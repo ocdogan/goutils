@@ -92,7 +92,7 @@ func RegisterHandlerWithName(name string, handler LogHandler) {
         
         bucket := newBucket(handler)
         buckets[name] = bucket
-        go bucket.process()
+        go bucket.handle()
     }
 }
 
