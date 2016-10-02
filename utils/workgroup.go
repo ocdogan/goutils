@@ -23,10 +23,44 @@
 package utils
 
 import (
-	"reflect"
+	"sync"
+	"sync/atomic"
 )
 
-// HasValue returns if the given interface has data beneath
-func HasValue(value interface{}) bool {
-	return value != nil && !reflect.ValueOf(value).IsNil()
+type WorkGroup struct {
+	workerCount int64
+	wg          sync.WaitGroup
+}
+
+func (w *WorkGroup) Add(delta int) {
+	if delta != 0 {
+		atomic.AddInt64(&w.workerCount, int64(delta))
+		w.wg.Add(delta)
+	}
+}
+
+func (w *WorkGroup) Done() {
+	if atomic.AddInt64(&w.workerCount, -1) < 0 {
+		atomic.StoreInt64(&w.workerCount, 0)
+	} else {
+		w.wg.Done()
+	}
+}
+
+func (w *WorkGroup) Count() int {
+	return int(atomic.LoadInt64(&w.workerCount))
+}
+
+func (w *WorkGroup) Wait() {
+	if atomic.LoadInt64(&w.workerCount) > 0 {
+		w.wg.Wait()
+		atomic.StoreInt64(&w.workerCount, 0)
+	}
+}
+
+func (w *WorkGroup) Close() {
+	old := atomic.SwapInt64(&w.workerCount, 0)
+	if old > 0 {
+		w.wg.Add(int(-old))
+	}
 }
